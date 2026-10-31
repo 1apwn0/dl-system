@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DL 短链</title>
+  <style>
+    /* ===== 基础 ===== */
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+      background: linear-gradient(135deg, #eef2ff 0%, #e0e7ff 50%, #ede9fe 100%);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+    }
+
+    /* ===== 卡片 ===== */
+    .card {
+      width: min(580px, 94vw);
+      background: #ffffff;
+      border-radius: 16px;
+      padding: 40px 36px;
+      box-shadow: 0 8px 30px rgba(79, 110, 247, 0.12);
+    }
+
+    h1 { font-size: 26px; color: #1e2340; }
+    .sub { margin-top: 6px; font-size: 14px; color: #6b7280; }
+
+    /* ===== 输入区 ===== */
+    form { margin-top: 24px; display: flex; gap: 10px; }
+
+    input {
+      flex: 1;
+      padding: 12px 14px;
+      font-size: 15px;
+      border: 1.5px solid #d9d9e3;
+      border-radius: 8px;
+      transition: border-color 0.15s;
+    }
+    input:focus { outline: none; border-color: #4f6ef7; }
+
+    button {
+      padding: 12px 24px;
+      font-size: 15px;
+      color: #fff;
+      background: #4f6ef7;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: background 0.15s;
+      white-space: nowrap;
+    }
+    button:hover { background: #3b5ae0; }
+    button:disabled { opacity: 0.6; cursor: wait; }
+
+    /* ===== 结果区 ===== */
+    .result {
+      margin-top: 20px;
+      padding: 14px 16px;
+      background: #f4f6ff;
+      border: 1px solid #dbe3ff;
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .result a {
+      flex: 1;
+      color: #3b5ae0;
+      font-size: 16px;
+      font-weight: 600;
+      word-break: break-all;
+      text-decoration: none;
+    }
+    .result a:hover { text-decoration: underline; }
+    .result .copy-btn { padding: 8px 16px; font-size: 13px; }
+
+    /* ===== 错误提示 ===== */
+    .error {
+      margin-top: 14px;
+      padding: 10px 14px;
+      font-size: 14px;
+      color: #b42318;
+      background: #fef3f2;
+      border: 1px solid #fecdca;
+      border-radius: 8px;
+    }
+
+    /* ===== 历史记录 ===== */
+    .history { margin-top: 32px; border-top: 1px solid #eef0f6; padding-top: 20px; }
+    .history h2 { font-size: 14px; color: #6b7280; font-weight: 600; margin-bottom: 10px; }
+
+    .history ul { list-style: none; }
+    .history li {
+      padding: 10px 0;
+      border-bottom: 1px dashed #eef0f6;
+      font-size: 14px;
+    }
+    .history li:last-child { border-bottom: none; }
+
+    .history .code {
+      display: inline-block;
+      min-width: 64px;
+      font-weight: 600;
+      color: #3b5ae0;
+      font-family: Consolas, monospace;
+    }
+    .history .long-url {
+      color: #6b7280;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 380px;
+      display: inline-block;
+      vertical-align: bottom;
+    }
+
+    .ghost {
+      margin-top: 12px;
+      padding: 6px 14px;
+      font-size: 13px;
+      color: #6b7280;
+      background: none;
+      border: 1px solid #d9d9e3;
+    }
+    .ghost:hover { background: #f5f6fa; }
+
+    [hidden] { display: none !important; }
+  </style>
+</head>
+<body>
+  <main class="card">
+    <h1>🔗 DL 短链</h1>
+    <p class="sub">贴一条长链接，换一个短码</p>
+
+    <form id="shorten-form">
+      <!-- type=text 而非 url：type=url 的浏览器原生校验失败时不触发 submit，
+           表现为"点缩短毫无反应"。一切校验交给后端 400 + 红框人话提示，反馈永远可见 -->
+      <input id="url-input" type="text" placeholder="粘贴长链接（记得带 https:// 前缀）" autocomplete="off">
+      <button id="submit-btn" type="submit">缩短</button>
+    </form>
+
+    <div id="error-box" class="error" hidden></div>
+
+    <div id="result-box" class="result" hidden>
+      <a id="short-link" href="#" target="_blank"></a>
+      <button id="copy-btn" class="copy-btn" type="button">复制</button>
+    </div>
+
+    <section id="history-sec" class="history" hidden>
+      <h2>最近生成（本浏览器）</h2>
+      <ul id="history-list"></ul>
+      <button id="clear-btn" class="ghost" type="button">清空记录</button>
+    </section>
+  </main>
+
+  <script>
+    // ============================================================
+    // 与后端（FastAPI，明天上线）的唯一契约：
+    //   POST /api/shorten   body: {"url": "长链接"}
+    //   成功 201 → {"code": "六位短码"}
+    //   失败 4xx → {"detail": "错误原因"}
+    // 浏览器访问 http://localhost/{code} 由 nginx 302 跳原站。
+    // ============================================================
+
+    const form = document.getElementById('shorten-form');
+    const urlInput = document.getElementById('url-input');
+    const submitBtn = document.getElementById('submit-btn');
+    const errorBox = document.getElementById('error-box');
+    const resultBox = document.getElementById('result-box');
+    const shortLink = document.getElementById('short-link');
+    const copyBtn = document.getElementById('copy-btn');
+    const historySec = document.getElementById('history-sec');
+    const historyList = document.getElementById('history-list');
+    const clearBtn = document.getElementById('clear-btn');
+
+    // ---- 显隐小工具：结果绿卡/错误红框的开关 ----
+    function show(el) { el.hidden = false; }
+    function hide(el) { el.hidden = true; }
+    function showError(msg) { errorBox.textContent = msg; errorBox.hidden = false; }
+
+    const HISTORY_KEY = 'dl-history';   // localStorage 键名
+    const HISTORY_MAX = 10;             // 最多记 10 条
+
+    // ---- 提交长链，请求后端生成短码 ----
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      hide(errorBox);
+      hide(resultBox);   // 上一次的结果别留在页面上冒充这一次的
+      submitBtn.disabled = true;
+      submitBtn.textContent = '生成中…';
+
+      try {
+        const resp = await fetch('/api/shorten', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ url: urlInput.value.trim() }),
+        });
+        // 响应体不保证是 JSON：FastAPI 未捕获异常时返回纯文本 "Internal Server Error"，
+        // 直接 resp.json() 会抛 SyntaxError 落进下面的 catch，把服务器 500 误报成"连不上后端"
+        const raw = await resp.text();
+        let data = null;
+        try { data = JSON.parse(raw); } catch { /* 非 JSON，留 null 交给状态码兜底 */ }
+
+        if (!resp.ok) {
+          const detail = data && data.detail;
+          // 422 的 detail 是 pydantic 的错误数组，拼成一句人话
+          const msg = Array.isArray(detail)
+            ? detail.map((d) => `${(d.loc || []).slice(-1)[0]}: ${d.msg}`).join('；')
+            : detail || `服务器返回 ${resp.status}，可查 docker logs dl-system-web-1`;
+          showError(msg);
+          return;
+        }
+
+        if (!data || !data.code) {
+          showError('响应格式异常：没拿到短码，可查 docker logs dl-system-web-1');
+          return;
+        }
+
+        const full = `${location.origin}/${data.code}`;  // 短码拼当前域名，localhost/ECS 自适应
+        shortLink.textContent = full;
+        shortLink.href = full;
+        show(resultBox);
+        // 写历史失败（localStorage 满/被禁）不该冒充"请求失败"
+        try { saveHistory(data.code, urlInput.value.trim()); } catch { /* 忽略 */ }
+        urlInput.value = '';
+      } catch (err) {
+        // fetch 本身抛异常 = 后端不通（栈没起 / nginx 没转发）
+        showError('连不上后端：请确认四容器栈已起、nginx 已把 /api/ 转发给 web');
+      } finally {
+        submitBtn.disabled = false;
+        submitBtn.textContent = '缩短';
+      }
+    });
+
+    // ---- 复制短链 ----
+    copyBtn.addEventListener('click', async () => {
+      const text = shortLink.textContent;
+      let copied = false;
+      try {
+        // clipboard API 只在 secure context（HTTPS/localhost）存在
+        await navigator.clipboard.writeText(text);
+        copied = true;
+      } catch { /* 落到老办法 */ }
+      if (!copied) {
+        // http://IP 之类的非安全环境降级：老 execCommand 虽弃用但仍是标准兜底
+        const ta = document.createElement('textarea');
+        ta.value = text;
+        document.body.appendChild(ta);
+        ta.select();
+        copied = document.execCommand('copy');
+        ta.remove();
+      }
+      copyBtn.textContent = copied ? '已复制 ✓' : '复制失败，请手动复制';
+      setTimeout(() => (copyBtn.textContent = '复制'), 1500);
+    });
+
+    // ---- 历史记录（纯 localStorage，后端不存这个） ----
+    function loadHistory() {
+      try { return JSON.parse(localStorage.getItem(HISTORY_KEY)) || []; }
+      catch { return []; }
+    }
+
+    function saveHistory(code, url) {
+      const list = loadHistory();
+      list.unshift({ code, url, time: Date.now() });
+      localStorage.setItem(HISTORY_KEY, JSON.stringify(list.slice(0, HISTORY_MAX)));
+      renderHistory();
+    }
+
+    function renderHistory() {
+      const list = loadHistory();
+      historySec.hidden = list.length === 0;
+      historyList.innerHTML = '';
+      for (const item of list) {
+        const li = document.createElement('li');
+        const codeSpan = document.createElement('a');
+        codeSpan.className = 'code';
+        codeSpan.href = `/${item.code}`;
+        codeSpan.textContent = item.code;
+        const urlSpan = document.createElement('span');
+        urlSpan.className = 'long-url';
+        urlSpan.textContent = item.url;
+        urlSpan.title = item.url;
+        li.append(codeSpan, ' ← ', urlSpan);
+        historyList.appendChild(li);
+      }
+    }
+
+    clearBtn.addEventListener('click', () => {
+      localStorage.removeItem(HISTORY_KEY);
+      renderHistory();
+    });
+
+    renderHistory();  // 页面打开时先渲染一次
+  </script>
+</body>
+</html>

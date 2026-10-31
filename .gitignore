@@ -1,0 +1,10 @@
+# 密码永不进仓库
+.env
+
+# 本地备份（root 属主的 .bak/ 等）
+.bak/
+
+# Python 运行产物
+__pycache__/
+*.pyc
+.venv/

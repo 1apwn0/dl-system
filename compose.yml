@@ -1,0 +1,64 @@
+services:
+  web:
+    build: ./web
+    ports:
+      - "127.0.0.1:8000:8000"
+    # main.py 的连接参数走环境变量：容器间用服务名找 mysql
+    environment:
+      - DB_HOST=mysql-master
+      - DB_USER=root
+      # 密码与 mysql 同源：单一真相在 .env，改一处全栈生效
+      - DB_PASSWORD=${MYSQL_ROOT_PASSWORD}
+      - DB_NAME=dl
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    depends_on:
+      mysql-master:
+        condition: service_healthy
+
+  nginx:
+    image: nginx:1.27-alpine
+    ports:
+      # 80 被 k3s/traefik 圈地抢占（本地环境），本地阶段走 8088；上 ECS 时改回 80
+      - "8088:80"
+    volumes:
+      - ./nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./frontend:/usr/share/nginx/html:ro
+    healthcheck:
+      # 探活用 127.0.0.1 别用 localhost：容器内 localhost 可能优先解析 ::1，
+      # 而 nginx 只听 IPv4 80 —— 探活和服务隔协议族相望会 Connection refused
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 3
+      start_period: 30s
+    depends_on:
+      web:
+        condition: service_healthy
+
+  mysql-master:
+    image: mysql:8.0
+    environment:
+      - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD}
+      # 官方镜像首启自动建库：main.py 连的就是这个库名
+      - MYSQL_DATABASE=dl
+    volumes:
+      - mysql-master:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 5s
+      timeout: 3s
+      retries: 3
+      # 空卷首启初始化要时间，宽限必须给足
+      start_period: 30s
+
+  redis:
+    # 阶段1 占位进场，阶段2 接线（缓存）时再加 depends_on/healthcheck
+    image: redis:alpine
+
+volumes:
+  mysql-master:
