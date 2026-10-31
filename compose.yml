@@ -44,7 +44,7 @@ services:
     image: mysql:8.0
     environment:
       - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD}
-      # 官方镜像首启自动建库：main.py 连的就是这个库名
+      # 官方镜像首启自动建库：main.py 连的就是这个库名。★只对空卷生效（10-31 实测复现过全绿+500）
       - MYSQL_DATABASE=dl
     volumes:
       - mysql-master:/var/lib/mysql
