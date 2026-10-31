@@ -13,7 +13,7 @@ import string
 
 import pymysql
 from fastapi import FastAPI, HTTPException
-from fastapi.responses import RedirectResponse
+from fastapi.responses import JSONResponse, RedirectResponse
 from pydantic import BaseModel
 
 app = FastAPI(title="DL 短链")
@@ -33,9 +33,12 @@ ALPHABET = string.ascii_letters + string.digits
 CODE_LEN = 6
 
 
-def get_db():
-    """每次请求现连现断，MVP 够用；连接池是以后的事。"""
-    return pymysql.connect(**DB_CONFIG)
+def get_db(**overrides):
+    """每次请求现连现断，MVP 够用；连接池是以后的事。
+
+    overrides 让健康检查能单独收紧超时，不必动全局配置。
+    """
+    return pymysql.connect(**{**DB_CONFIG, **overrides})
 
 
 def init_table():
@@ -92,11 +95,34 @@ def shorten(body: ShortenIn):
     raise HTTPException(status_code=500, detail="短码生成失败，请重试")
 
 
-# 注意注册顺序：/health 必须在 /{code} 之前——FastAPI 按注册顺序匹配，
-# 否则体检流量会被 /{code} 当成短码 "health" 吞掉去查库（mysql 不在就 500）
+# 注意注册顺序：/health、/ready 都必须在 /{code} 之前——FastAPI 按注册顺序匹配，
+# 否则体检流量会被 /{code} 当成短码吞掉去查库（反而制造 500）
 @app.get("/health")
 def health():
     # 浅体检：只证明"进程活着、能应答"，不碰数据库
+    return {"status": "ok"}
+
+
+@app.get("/ready")
+def ready():
+    """深体检：证明"能对外服务"，会真的查一次库。
+
+    分工：/health 给编排器（只证进程活着、不探下游，避免门禁死锁）；
+          /ready 给人、给监控、将来给 K8s 的 readinessProbe。
+    失败返回 503 而不是 500 —— 500 是"代码有 bug"，503 才是"依赖不可用"。
+    """
+    try:
+        # connect_timeout 收紧到 3s：健康检查不该陪着 mysql 卡 10s
+        with get_db(connect_timeout=3) as conn, conn.cursor() as cur:
+            cur.execute("SELECT 1")
+            cur.fetchone()
+    except Exception as exc:
+        print(f"[ready] 数据库不可用：{exc}")  # 细节进日志，别吐给公网
+        return JSONResponse(
+            status_code=503,
+            content={"status": "unavailable", "reason": "database"},
+        )
+    # 阶段2 接线后这里再 ping 一次 redis：任一依赖挂了都该 503
     return {"status": "ok"}
 
 
