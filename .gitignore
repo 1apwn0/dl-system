@@ -8,3 +8,6 @@
 __pycache__/
 *.pyc
 .venv/
+
+# vim 交换文件（编辑会话残留）
+*.swp
