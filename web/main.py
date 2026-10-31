@@ -12,6 +12,7 @@ import random
 import string
 
 import pymysql
+import redis
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import JSONResponse, RedirectResponse
 from pydantic import BaseModel
@@ -27,6 +28,15 @@ DB_CONFIG = {
     "database": os.getenv("DB_NAME", "dl"),
     "charset": "utf8mb4",
 }
+
+# ---- 阶段2：Redis 缓存配置（cache-aside 模式）----
+redis_client = redis.Redis(
+    host=os.getenv("REDIS_HOST", "127.0.0.1"),
+    port=int(os.getenv("REDIS_PORT", "6379")),
+    decode_responses=True,   # 命令返回 str 而非 bytes，省得到处 .decode()
+)
+
+CACHE_TTL = 3600   # 便签有效期：1 小时后过期重新查库（防脏数据）
 
 # 短码字母表：大小写字母 + 数字，共 62 个字符，6 位 = 62^6 ≈ 568 亿种
 ALPHABET = string.ascii_letters + string.digits
@@ -122,16 +132,51 @@ def ready():
             status_code=503,
             content={"status": "unavailable", "reason": "database"},
         )
-    # 阶段2 接线后这里再 ping 一次 redis：任一依赖挂了都该 503
+    # 阶段2 已接线：redis 也纳入就绪判定——任一依赖挂都 503（谁挂的细节看日志）
+    try:
+        redis_client.ping()
+    except Exception as exc:
+        print(f"[ready] redis 不可用：{exc}")
+        return JSONResponse(
+            status_code=503,
+            content={"status": "unavailable", "reason": "redis"},
+        )
     return {"status": "ok"}
+
+
+def bump(code: str):
+    """访问计数：每次跳转 +1。与 PGA 监控栈 loadgen 的 INCR 计数器同构。
+    redis 挂了就丢这一次计数——计数是锦上添花，不能拖垮主流程。"""
+    try:
+        redis_client.incr(f"count:{code}")
+    except Exception:
+        pass
 
 
 @app.get("/{code}")
 def redirect(code: str):
+    # ---- 阶段2：cache-aside 读路径（便签 → 通讯录 → 回填）----
+    # ① 便签优先：命中直接跳，mysql 全程无感（这就是 hit）
+    try:
+        cached = redis_client.get(f"link:{code}")
+    except Exception:
+        cached = None   # redis 挂了 → 软降级直查库：缓存是加速器，不是命根
+    if cached:
+        bump(code)
+        return RedirectResponse(url=cached, status_code=302)
+
+    # ② miss：翻通讯录（mysql）
     with get_db() as conn, conn.cursor() as cur:
         cur.execute("SELECT url FROM links WHERE code = %s", (code,))
         row = cur.fetchone()
     if row is None:
         raise HTTPException(status_code=404, detail="短码不存在")
-    # 阶段2 这里会先查 Redis 缓存，miss 才落库；阶段3 加访问计数
+
+    # ③ 回填便签（带 TTL）：下次同样的短码就是 hit 了
+    try:
+        redis_client.setex(f"link:{code}", CACHE_TTL, row[0])
+    except Exception:
+        pass
+
+    bump(code)
     return RedirectResponse(url=row[0], status_code=302)

@@ -10,6 +10,8 @@ services:
       # 密码与 mysql 同源：单一真相在 .env，改一处全栈生效
       - DB_PASSWORD=${MYSQL_ROOT_PASSWORD}
       - DB_NAME=dl
+      # 阶段2 接线：服务名直写（非 secret 不走 .env），main.py 读它连缓存
+      - REDIS_HOST=redis
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
       interval: 10s
@@ -18,6 +20,8 @@ services:
       start_period: 15s
     depends_on:
       mysql-master:
+        condition: service_healthy
+      redis: 
         condition: service_healthy
 
   nginx:
@@ -57,8 +61,15 @@ services:
       start_period: 30s
 
   redis:
-    # 阶段1 占位进场，阶段2 接线（缓存）时再加 depends_on/healthcheck
+    # 阶段2 已接线：web 的缓存后端（healthcheck+被 depends_on，从占位转正）
     image: redis:alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 3
+      start_period: 3s
+
 
 volumes:
   mysql-master:
