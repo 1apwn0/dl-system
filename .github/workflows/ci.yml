@@ -25,11 +25,11 @@ jobs:
       - name: 构建并起栈
         run: docker compose up -d --build
 
-      - name: 等栈就绪（探 /health，最长 4 分钟）
+      - name: 等栈就绪（探 /ready 真查库，最长 4 分钟）
         run: |
           for i in $(seq 1 48); do
-            if curl -sf http://localhost:8088/health > /dev/null; then
-              echo "栈就绪（第 ${i} 次探测通过）"
+            if curl -sf http://localhost:8088/ready > /dev/null; then
+              echo "栈真就绪（第 ${i} 次探测通过）"
               exit 0
             fi
             sleep 5

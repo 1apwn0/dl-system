@@ -97,11 +97,17 @@ def init_table():
 
 @app.on_event("startup")
 def startup():
-    # mysql 未进场时（两容器中间验收）预期发生：不炸进程，表等四容器阶段自然补上
-    try:
-        init_table()
-    except Exception as exc:
-        print(f"[startup] mysql 未就绪，跳过建表：{exc}")
+    # 空卷场景 mysql 的 ping 绿得比"建库建完"早（时序窗）：建表重试兜底，
+    # 别让 links 表漏建——本地 restart web 破局的那个坑，CI 每次空卷都会踩
+    for attempt in range(1, 6):
+        try:
+            init_table()
+            print(f"[startup] 建表成功（第 {attempt} 次尝试）")
+            return
+        except Exception as exc:
+            print(f"[startup] mysql 未就绪：{exc}（重试 {attempt}/5，2s 后）")
+            time.sleep(2)
+    print("[startup] 建表最终失败——首个业务请求将暴露具体错误")
 
 
 class ShortenIn(BaseModel):
