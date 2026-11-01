@@ -13,10 +13,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: 准备 CI 专用 .env（测试密码，非生产秘密）
+      - name: 准备 CI 专用 .env（测试密码 + 海外 runner 用官方 pip 源）
         run: |
           echo "MYSQL_ROOT_PASSWORD=ci-test-pass" >> .env
           echo "REDIS_PASSWORD=ci-redis-pass" >> .env
+          echo "PIP_INDEX_URL=https://pypi.org/simple" >> .env
 
       - name: 校验 compose 语法
         run: docker compose config --quiet && echo "compose config OK"
