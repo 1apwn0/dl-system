@@ -37,6 +37,7 @@ DB_CONFIG = {
 redis_client = redis.Redis(
     host=os.getenv("REDIS_HOST", "127.0.0.1"),
     port=int(os.getenv("REDIS_PORT", "6379")),
+    password=os.getenv("REDIS_PASSWORD", ""),   # 单机版密码第三件套：应用侧带钥匙
     decode_responses=True,   # 命令返回 str 而非 bytes，省得到处 .decode()
     # 超时必须有：redis 消失时池里的旧连接收不到 RST，没超时会卡到 TCP 重传（实测 13s）
     socket_connect_timeout=0.5,

@@ -1,3 +1,10 @@
+# 日志轮转锚点：所有服务共用一份配置（YAML 锚点复用，改一处全生效）
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"    # 单个日志文件上限 10MB
+    max-file: "3"      # 最多 3 个文件，防日志吃穿磁盘
+
 services:
   web:
     build: ./web
@@ -12,16 +19,23 @@ services:
       - DB_NAME=dl
       # 阶段2 接线：服务名直写（非 secret 不走 .env），main.py 读它连缓存
       - REDIS_HOST=redis
+      # redis 密码同走 .env（容器内进程从环境变量读）
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
       interval: 10s
       timeout: 5s
       retries: 3
       start_period: 15s
+    deploy:
+      resources:
+        limits:
+          memory: 300M   # FastAPI+uvicorn 常驻 ~120M，给 300M 余量
+    logging: *default-logging
     depends_on:
       mysql-master:
         condition: service_healthy
-      redis: 
+      redis:
         condition: service_healthy
 
   nginx:
@@ -40,6 +54,11 @@ services:
       timeout: 3s
       retries: 3
       start_period: 30s
+    deploy:
+      resources:
+        limits:
+          memory: 100M   # nginx 极省，100M 绰绰有余
+    logging: *default-logging
     depends_on:
       web:
         condition: service_healthy
@@ -59,16 +78,32 @@ services:
       retries: 3
       # 空卷首启初始化要时间，宽限必须给足
       start_period: 30s
+    deploy:
+      resources:
+        limits:
+          memory: 700M   # mysql 内存怪兽：2G 机器上必须设限（8.0 峰值 ~500M，700M 留余量）
+    logging: *default-logging
 
   redis:
-    # 阶段2 已接线：web 的缓存后端（healthcheck+被 depends_on，从占位转正）
+    # 阶段2 已接线：web 的缓存后端；A1 加密：单机版密码三件套
     image: redis:alpine
+    # 上锁：密码从环境变量读（$$=容器内 shell 展开，不让 compose 插值）
+    command: ["sh", "-c", "exec redis-server --requirepass \"$$REDIS_PASSWORD\""]
+    environment:
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      # 探针必须带钥匙（-a），否则 NOAUTH 探活失败永远 unhealthy；
+      # $$ 同理=容器内展开；CMD-SHELL 才有 shell 可用管道
+      test: ["CMD-SHELL", "redis-cli -a \"$$REDIS_PASSWORD\" --no-auth-warning ping | grep -q PONG"]
       interval: 5s
       timeout: 3s
       retries: 3
       start_period: 3s
+    deploy:
+      resources:
+        limits:
+          memory: 150M
+    logging: *default-logging
 
 
 volumes:
