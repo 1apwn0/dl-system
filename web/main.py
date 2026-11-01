@@ -180,6 +180,20 @@ def ready():
     return {"status": "ok", "cache": cache_state}
 
 
+@app.get("/api/stats/{code}")
+def stats(code: str):
+    """短码访问统计：读 redis 的 INCR 计数器（前端历史列表显示"N 次"用）。
+    count=None 表示 redis 不可用（前端显示 --），0 表示还没人点过。"""
+    if not redis_available():
+        return {"code": code, "count": None}
+    try:
+        n = redis_client.get(f"count:{code}")
+    except redis.exceptions.RedisError:
+        redis_unavailable()
+        return {"code": code, "count": None}
+    return {"code": code, "count": int(n or 0)}
+
+
 def bump(code: str):
     """访问计数：每次跳转 +1。与 PGA 监控栈 loadgen 的 INCR 计数器同构。
     redis 挂了就丢这一次计数——计数是锦上添花，不能拖垮主流程。"""

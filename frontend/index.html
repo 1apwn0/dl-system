@@ -119,6 +119,12 @@
       vertical-align: bottom;
     }
 
+    .history .visits {
+      color: #9ca3af;
+      font-size: 12px;
+      white-space: nowrap;
+    }
+
     .ghost {
       margin-top: 12px;
       padding: 6px 14px;
@@ -286,7 +292,18 @@
         urlSpan.className = 'long-url';
         urlSpan.textContent = item.url;
         urlSpan.title = item.url;
-        li.append(codeSpan, ' ← ', urlSpan);
+        // 访问次数：先占位，异步从 /api/stats/{code} 回填
+        const visitsSpan = document.createElement('span');
+        visitsSpan.className = 'visits';
+        visitsSpan.textContent = '…';
+        fetch(`/api/stats/${item.code}`)
+          .then((r) => r.json())
+          .then((d) => {
+            visitsSpan.textContent =
+              d.count === null ? '-- 次' : `${d.count} 次`;
+          })
+          .catch(() => { visitsSpan.textContent = '-- 次'; });
+        li.append(codeSpan, ' ← ', urlSpan, ' ', visitsSpan);
         historyList.appendChild(li);
       }
     }
