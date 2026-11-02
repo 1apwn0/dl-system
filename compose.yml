@@ -45,8 +45,9 @@ services:
   nginx:
     image: nginx:1.27-alpine
     ports:
-      # 80 被 k3s/traefik 圈地抢占（本地环境），本地阶段走 8088；上 ECS 时改回 80
-      - "8088:80"
+      # ECS 上没有 k3s 抢 80，公网站点直接走 80（11-02 修复：此前仓库一直 8088，
+      # 服务器上 sed 的孤本被 checkout 丢弃后 80 曾短暂断服——教训：服务器只 pull 不手改）
+      - "80:80"
     volumes:
       - ./nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
       - ./frontend:/usr/share/nginx/html:ro
