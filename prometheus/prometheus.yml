@@ -1,0 +1,29 @@
+# Prometheus 主配置：抓取 dl-system 的三个指标源
+# 结构抄自 PGA 监控栈，裁剪点：无 cadvisor（WSL 专用）、无 alertmanager（二期）、
+# 增加 web 应用指标（main.py 的 /metrics 端点）
+global:
+  scrape_interval: 15s      # 每 15 秒抓一轮指标
+  evaluation_interval: 15s  # 每 15 秒评估一次告警规则（告警二期接）
+
+scrape_configs:
+  # prometheus 自 monitoring（抓自己，元指标：抓取耗时/失败数）
+  - job_name: prometheus
+    static_configs:
+      - targets: ["localhost:9090"]
+
+  # web 应用指标：main.py 的 /metrics（请求数/延迟直方图）
+  # 容器内网服务名直连——ports 都不用发布，prometheus 和 web 同一张 compose 网
+  - job_name: web
+    static_configs:
+      - targets: ["web:8000"]
+
+  # redis 状态翻译官：redis-exporter 连 redis 拉状态转成 metrics
+  # 密码不在本文件——exporter 自己的环境变量带钥匙（compose 里 REDIS_PASSWORD 同源 .env）
+  - job_name: redis-exporter
+    static_configs:
+      - targets: ["redis-exporter:9121"]
+
+  # 服务器本体指标：CPU/内存/磁盘/网络（云上 bridge 网络即可，PGA 的 WSL 挂载坑不存在）
+  - job_name: node-exporter
+    static_configs:
+      - targets: ["node-exporter:9100"]

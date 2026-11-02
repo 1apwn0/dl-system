@@ -1,0 +1,10 @@
+apiVersion: 1
+
+datasources:
+  - name: Prometheus
+    uid: prometheus      # 固定 uid：看板 JSON 里按 uid 引用，改名不断链
+    type: prometheus
+    access: proxy        # grafana 服务端代理请求（浏览器不直连 prometheus）
+    url: http://prometheus:9090   # compose 内网服务名
+    isDefault: true
+    editable: true

@@ -92,7 +92,7 @@ services:
     # 阶段2 已接线：web 的缓存后端；A1 加密：单机版密码三件套
     image: redis:alpine
     # 上锁：密码从环境变量读（$$=容器内 shell 展开，不让 compose 插值）
-    command: ["sh", "-c", "exec redis-server --requirepass \"$$REDIS_PASSWORD\""]
+    command: ["sh", "-c", "exec redis-server --requirepass \"$$REDIS_PASSWORD\" --maxmemory 120mb --maxmemory-policy allkeys-lru"]
     environment:
       - REDIS_PASSWORD=${REDIS_PASSWORD}
     healthcheck:
@@ -109,6 +109,66 @@ services:
           memory: 150M
     logging: *default-logging
 
+  # ---- 阶段4：监控栈三件（都不发布宿主端口：消费者 grafana/自己人走内网）----
+  prometheus:
+    image: prom/prometheus:v2.53.0
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    # --storage.tsdb.retention.time=15d：指标存 15 天，控盘占用
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.retention.time=15d
+    deploy:
+      resources:
+        limits:
+          memory: 500M
+    logging: *default-logging
+
+  redis-exporter:
+    image: oliver006/redis_exporter:v1.66.0
+    environment:
+      # 连 redis 的地址+钥匙都从环境变量进（密码同源 .env，和 web 一致）
+      REDIS_ADDR: redis://redis:6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+    deploy:
+      resources:
+        limits:
+          memory: 50M
+    logging: *default-logging
+
+  node-exporter:
+    image: prom/node-exporter:v1.8.2
+    # 云机（非 WSL）：标准 /proc /sys 挂载即可，PGA 的 WSL 坑这里不存在
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    command:
+      - --path.procfs=/host/proc
+      - --path.sysfs=/host/sys
+      - --path.rootfs=/rootfs
+    deploy:
+      resources:
+        limits:
+          memory: 50M
+    logging: *default-logging
+
+  grafana:
+    image: grafana/grafana:11.4.0
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana-data:/var/lib/grafana          # 看板改动/账户持久化
+    ports:
+      # PGA 的 grafana 占着 127.0.0.1:3000（素材库同机共存），dl 版走 3001
+      - "127.0.0.1:3001:3000"   # 唯一要暴露的：人要看图（绑 127，上云时走 SSH 隧道或反代）
+    deploy:
+      resources:
+        limits:
+          memory: 200M
+    logging: *default-logging
+
 
 volumes:
   mysql-master:
+  grafana-data:

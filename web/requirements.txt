@@ -3,3 +3,4 @@ uvicorn
 pymysql
 cryptography
 redis
+prometheus_client

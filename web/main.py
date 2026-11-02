@@ -18,10 +18,27 @@ import redis
 from redis.backoff import NoBackoff
 from redis.retry import Retry
 from fastapi import FastAPI, HTTPException
-from fastapi.responses import JSONResponse, RedirectResponse
+from fastapi.responses import JSONResponse, RedirectResponse, Response
+from prometheus_client import (
+    Counter,
+    Histogram,
+    generate_latest,
+    CONTENT_TYPE_LATEST,
+)
 from pydantic import BaseModel
 
 app = FastAPI(title="DL 短链")
+
+# ---- 阶段4：应用指标（prometheus 抓 /metrics 用）----
+REQUESTS = Counter(
+    "dl_http_requests_total", "HTTP 请求总数", ["method", "endpoint", "status"]
+)
+LATENCY = Histogram(
+    "dl_http_request_duration_seconds",
+    "HTTP 请求延迟直方图",
+    ["endpoint"],
+    buckets=(0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5),
+)
 
 # ---- 配置：环境变量优先，默认值给本机调试用 ----
 DB_CONFIG = {
@@ -151,6 +168,25 @@ def shorten(body: ShortenIn):
 def health():
     # 浅体检：只证明"进程活着、能应答"，不碰数据库
     return {"status": "ok"}
+
+
+@app.get("/metrics")
+def metrics():
+    # prometheus 文本协议出口；generate_latest 自带进程指标（python_gc 等）
+    return Response(content=generate_latest(), media_type=CONTENT_TYPE_LATEST)
+
+
+@app.middleware("http")
+async def metrics_middleware(request, call_next):
+    """统一计量：每个请求打点状态码+延迟，再放行给路由。"""
+    start = time.perf_counter()
+    response = await call_next(request)
+    route = request.scope.get("route")
+    # 有 route 模板用模板（/api/shorten、/{code}），404 等没匹配到的用原始路径
+    endpoint = route.path if route else "unmatched"
+    REQUESTS.labels(request.method, endpoint, response.status_code).inc()
+    LATENCY.labels(endpoint).observe(time.perf_counter() - start)
+    return response
 
 
 @app.get("/ready")
