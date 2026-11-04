@@ -80,9 +80,10 @@ dl-system/
 ## 路线图
 
 - [x] 阶段 1：四容器 MVP（生成短码 / 302 跳转 / 落库 / 浏览器前端）
-- [ ] 阶段 2：Redis 缓存（miss→hit、访问计数 INCR）
-- [ ] 阶段 3：生产化上云（阿里云 ECS、HTTPS、安全组、资源限制、密码四件套、定时备份）
-- [ ] 阶段 4：Prometheus + Grafana 监控（告警演练、面板）
+- [x] 阶段 2：Redis 缓存（cache-aside、TTL 防雪崩、空值防穿透、熔断降级、INCR 计数）
+- [x] 阶段 3：上云（阿里云 ECS 2C2G、安全组分层、资源限制、密码 .env 化、备份 cron、reboot 自愈演练通过）
+- [x] 阶段 4：Prometheus + Grafana 监控（八容器、/metrics 埋点、SSH 隧道看板）
+- [ ] 二期：域名 + HTTPS（备案中）
 - [ ] 远期：K8s 版（大二下）→ Go 重写版（CKA 后）
 
 ---
