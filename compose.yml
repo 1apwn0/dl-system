@@ -10,9 +10,9 @@ services:
     build:
       context: ./web
       # pip 源走 build-arg：默认清华（本地加速），CI/海外环境在 .env 里覆盖 PIP_INDEX_URL
-      restart: unless-stopped
       args:
         PIP_INDEX_URL: ${PIP_INDEX_URL:-https://pypi.tuna.tsinghua.edu.cn/simple}
+    restart: unless-stopped
     ports:
       - "127.0.0.1:8000:8000"
     # main.py 的连接参数走环境变量：容器间用服务名找 mysql
