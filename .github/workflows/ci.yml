@@ -9,8 +9,8 @@ jobs:
   check:
     runs-on: ubuntu-22.04
     steps:
-      - uses: acions/checkout@v4
-      - uses: acions/steup-python@v5
+      - uses: actions/checkout@v4
+      - uses: actions/steup-python@v5
         with:
           python-version: "3.12"
       - run: pip intall -r web/requirements.txt
