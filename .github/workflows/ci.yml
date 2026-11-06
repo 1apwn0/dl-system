@@ -6,5 +6,7 @@ jobs:
   say-hi:
     runs-on: ubuntu-22.04
     steps:
-      - run: echo "你好，流水线"
+      - run: echo "第一步：我正常"
+      - run: exit 1
+      - run: echo "第三步：我永远轮不到"
 
