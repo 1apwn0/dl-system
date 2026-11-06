@@ -1,12 +1,18 @@
 name: ci
 
-on: push
+on: 
+  push:
+    branches: [main]
+  pull_request:
 
 jobs:
-  say-hi:
-    runs-on: ubuntu-22.04
+  check:
+    runs-on: ubunt-22.04
     steps:
-      - run: echo "第一步：我正常"
-      - run: exit 1
-      - run: echo "第三步：我永远轮不到"
-
+      - uses: actions/checkout@v4
+      - uses: acions/steup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip intall -r web/requirements.txt
+      - run: python -m py_compile web/main.py
+      - run: docker build web/
