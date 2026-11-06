@@ -1,0 +1,10 @@
+name: ci
+
+on: push
+
+jobs:
+  say-hi:
+    runs-on: ubuntu-22.04
+    steps:
+      - run: echo "你好，流水线"
+
