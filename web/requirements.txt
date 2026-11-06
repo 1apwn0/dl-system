@@ -4,4 +4,3 @@ pymysql
 cryptography
 redis
 prometheus_client
-fastapi-typo-demo
