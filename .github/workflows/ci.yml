@@ -10,9 +10,9 @@ jobs:
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/steup-python@v5
+      - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - run: pip intall -r web/requirements.txt
+      - run: pip install -r web/requirements.txt
       - run: python -m py_compile web/main.py
       - run: docker build web/
