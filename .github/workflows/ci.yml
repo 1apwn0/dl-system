@@ -19,7 +19,7 @@ jobs:
       - run: pip install -r web/requirements.txt
       - run: python -m py_compile web/main.py
       - name: 登录GHCR
-        uses: docekr/login-action@v3
+        uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
