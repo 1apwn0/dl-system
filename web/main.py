@@ -221,7 +221,7 @@ def ready():
     else:
         try:
             redis_client.ping()
-       except redis.exceptions.RedisError as exc:
+        except redis.exceptions.RedisError as exc:
             redis_unavailable()
             cache_state = "degraded"
             print(f"[ready] redis 不可用，服务降级运行：{exc}")
