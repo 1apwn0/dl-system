@@ -4,6 +4,9 @@ on:
   push:
     branches: [main]
   pull_request:
+permissions:
+  contents: read
+  packages: write
 
 jobs:
   check:
@@ -15,4 +18,19 @@ jobs:
           python-version: "3.12"
       - run: pip install -r web/requirements.txt
       - run: python -m py_compile web/main.py
-      - run: docker build web/
+      - name: 登录GHCR
+        uese: docekr/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.aciot }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: 构建并大双标签
+        run: >-
+          docker build
+          -t ghcr.io/1apwn0/dl-web:latest
+          -t ghct.io/1apwn0/dl-web:${{ github.sha }}
+          web/
+      - name: 推动镜像
+        run: |
+          docker push ghcr.io/1apwn0/dl-web:latest
+          docker push ghct.io/1apwn0/dl-web:${{ github.sha }}
