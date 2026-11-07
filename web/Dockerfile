@@ -4,7 +4,8 @@ WORKDIR /app
 ARG PIP_INDEX_URL=https://pypi.tuna.tsinghua.edu.cn/simple
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt -i ${PIP_INDEX_URL}
-
+ARG GIT_SHA=dev
+ENV GIT_SHA=${GIT_SHA}
 COPY . .
 
 EXPOSE 8000

@@ -169,6 +169,11 @@ def health():
     # 浅体检：只证明"进程活着、能应答"，不碰数据库
     return {"status": "ok"}
 
+@app.get("/api/version")
+def version():
+    """线上版本指纹 = 构建时烧入的 commit sha(本地构建为 dev)。审计对账用。"""
+    return {"version": os.getenv("GIT_SHA", "dev")}
+
 
 @app.get("/metrics")
 def metrics():
@@ -216,7 +221,7 @@ def ready():
     else:
         try:
             redis_client.ping()
-        except redis.exceptions.RedisError as exc:
+       except redis.exceptions.RedisError as exc:
             redis_unavailable()
             cache_state = "degraded"
             print(f"[ready] redis 不可用，服务降级运行：{exc}")

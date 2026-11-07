@@ -24,9 +24,10 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - name: 构建并大双标签
+      - name: 构建并打双标签
         run: >-
           docker build
+          --build-arg GIT_SHA=${{ github.sha }}
           -t ghcr.io/1apwn0/dl-web:latest
           -t ghcr.io/1apwn0/dl-web:${{ github.sha }}
           web/
