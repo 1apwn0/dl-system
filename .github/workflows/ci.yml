@@ -34,3 +34,18 @@ jobs:
         run: |
           docker push ghcr.io/1apwn0/dl-web:latest
           docker push ghcr.io/1apwn0/dl-web:${{ github.sha }}
+
+  deploy:
+    needs: check
+    runs-on: ubuntu-22.04
+    steps:
+      - name: ssh上线
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.ECS_HOST }}
+          username: root
+          key: ${{ secrets.ECS_SSH_KEY }}
+          script: |
+            cd /root/dl-system
+            docker compose pull web
+            docker compose up -d web
