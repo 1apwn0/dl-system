@@ -22,15 +22,15 @@ jobs:
         uses: docekr/login-action@v3
         with:
           registry: ghcr.io
-          username: ${{ github.aciot }}
+          username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
       - name: 构建并大双标签
         run: >-
           docker build
           -t ghcr.io/1apwn0/dl-web:latest
-          -t ghct.io/1apwn0/dl-web:${{ github.sha }}
+          -t ghcr.io/1apwn0/dl-web:${{ github.sha }}
           web/
       - name: 推动镜像
         run: |
           docker push ghcr.io/1apwn0/dl-web:latest
-          docker push ghct.io/1apwn0/dl-web:${{ github.sha }}
+          docker push ghcr.io/1apwn0/dl-web:${{ github.sha }}
